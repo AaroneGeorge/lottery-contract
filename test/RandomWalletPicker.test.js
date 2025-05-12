@@ -21,7 +21,6 @@ const KEY_HASH_SEPOLIA = "0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5
 describe("RandomWalletPicker with VRFCoordinatorV2Mock", function () {
     let RandomWalletPicker, randomWalletPicker;
     let VRFCoordinatorV2Mock, vrfCoordinatorV2Mock;
-    let LinkToken, linkToken;
     let owner;
     let subscriptionId;
 
@@ -31,11 +30,6 @@ describe("RandomWalletPicker with VRFCoordinatorV2Mock", function () {
     beforeEach(async function () {
         [owner] = await ethers.getSigners();
         
-        // Deploy mock LINK token
-        LinkToken = await ethers.getContractFactory("LinkToken");
-        linkToken = await LinkToken.deploy();
-        const linkTokenAddress = await linkToken.getAddress();
-
         // Deploy VRFCoordinatorV2Mock
         VRFCoordinatorV2Mock = await ethers.getContractFactory("VRFCoordinatorV2Mock");
         vrfCoordinatorV2Mock = await VRFCoordinatorV2Mock.deploy(BASE_FEE, GAS_PRICE_LINK);
@@ -43,7 +37,6 @@ describe("RandomWalletPicker with VRFCoordinatorV2Mock", function () {
 
         // Create a VRF subscription
         const txResponse = await vrfCoordinatorV2Mock.createSubscription();
-        const txReceipt = await txResponse.wait(1);
         
         // Get subscription ID from event (using event index since the mock may have a different event structure)
         const events = await vrfCoordinatorV2Mock.queryFilter("SubscriptionCreated");
