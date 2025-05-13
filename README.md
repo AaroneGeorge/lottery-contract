@@ -30,6 +30,11 @@ The `RandomWalletPicker` smart contract:
    PRIVATE_KEY=your_private_key_without_0x
    SEPOLIA_RPC_URL=your_sepolia_rpc_url
    SUBSCRIPTION_ID=your_chainlink_vrf_subscription_id
+   PRIVATE_KEY=your_wallet_pvt_key
+   VRF_COORDINATOR_SEPOLIA=
+   KEY_HASH_SEPOLIA=
+   BASE_SEPOLIA_RPC_URL=your_base_sepolia_rpc_url
+   BASE_SEPOLIA_SUBSCRIPTION_ID=your_chainlink_vrf_subscription_id_in_base_sepolia
    ```
 
 ## Creating a Chainlink VRF Subscription
@@ -43,10 +48,10 @@ After deploying your contract, you'll need to add it as a consumer to your subsc
 
 ## Deployment
 
-Deploy to Sepolia testnet:
+Deploy to base sepolia testnet:
 
 ```bash
-npx hardhat run scripts/deploy.js --network sepolia
+npx hardhat run scripts/deploy.js --network baseSepolia
 ```
 
 After deployment:
@@ -69,14 +74,14 @@ Once deployed and properly configured with Chainlink VRF:
 Run tests locally:
 
 ```bash
-npx hardhat test
+npx hardhat test --network baseSepolia
 ```
 
-## Sepolia Testnet Configuration
+## Base Sepolia Testnet Configuration
 
-- VRF Coordinator: `0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625`
-- Key Hash: `0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c`
-- LINK Token: `0x779877A7B0D9E8603169DdbD7836e478b4624789`
+- VRF Coordinator: `0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE`
+- Key Hash: `0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71`
+- LINK Token: `0xE4aB69C077896252FAFBD49EFD26B5D171A32410`
 
 ## Security Considerations
 
@@ -87,3 +92,7 @@ npx hardhat test
 
 - [Chainlink VRF Documentation](https://docs.chain.link/vrf)
 - [Chainlink VRF Subscription Management](https://vrf.chain.link)
+
+## Implementing Mock VRF Functionality for Testing
+
+To implement mock VRF functionality for testing, we utilize the `VRFCoordinatorV2Mock.sol` contract. This mock contract allows us to simulate the behavior of the Chainlink VRF Coordinator, enabling us to test our contract's interaction with the VRF system in a controlled environment.

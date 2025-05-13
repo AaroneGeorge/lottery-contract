@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.11;
 
-import "@chainlink/contracts/src/v0.8/vrf/VRFConsumerBaseV2.sol";
-import "@chainlink/contracts/src/v0.8/vrf/interfaces/VRFCoordinatorV2Interface.sol";
+import "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 
-contract RandomWalletPicker is VRFConsumerBaseV2 {
-    address public owner;
+contract RandomWalletPicker is VRFConsumerBaseV2Plus {
+    // address public owner; // Inherited from ConfirmedOwner via VRFConsumerBaseV2Plus
     address payable[10] public walletAddresses;
     
-    // Chainlink VRF Configuration - Sepolia
-    VRFCoordinatorV2Interface immutable i_vrfCoordinator;
+    // Chainlink VRF Configuration
     bytes32 immutable i_keyHash; 
     uint256 immutable i_subscriptionId;
-    uint32 internal i_callbackGasLimit = 200000; // Increased from 100000
+    uint32 internal i_callbackGasLimit = 200000;
     uint16 internal i_requestConfirmations = 3;  
-    uint32 internal i_numWords = 1; // Only need one random number
+    uint32 internal i_numWords = 1;
 
     // Result variables
     uint256 public s_randomWord;
@@ -23,14 +22,14 @@ contract RandomWalletPicker is VRFConsumerBaseV2 {
 
     // Events
     event WalletPicked(uint256 indexed requestId, address indexed winner);
-    event WalletsSet(address indexed setter, uint256 timestamp);
-    event RandomnessRequested(uint256 indexed requestId, address requester);
+    event WalletsSet(address indexed setter, uint256 timestamp); // msg.sender for setter will be owner()
+    event RandomnessRequested(uint256 indexed requestId, address requester); // msg.sender for requester will be owner()
 
     /**
      * @param _initialWallets Array of 10 wallet addresses to pick from
-     * @param _vrfCoordinatorAddress VRF Coordinator address (Sepolia: 0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625)
-     * @param _subscriptionId Your subscription ID from https://vrf.chain.link/sepolia
-     * @param _keyHash The gas lane key hash (Sepolia: 0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c)
+     * @param _vrfCoordinatorAddress VRF Coordinator address (e.g., Base Sepolia: 0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE)
+     * @param _subscriptionId Your uint256 subscription ID from vrf.chain.link
+     * @param _keyHash The gas lane key hash (e.g., Base Sepolia: 0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71)
      */
     constructor(
         address payable[10] memory _initialWallets, 
@@ -38,12 +37,10 @@ contract RandomWalletPicker is VRFConsumerBaseV2 {
         uint256 _subscriptionId,
         bytes32 _keyHash
     )
-        VRFConsumerBaseV2(_vrfCoordinatorAddress)
+        VRFConsumerBaseV2Plus(_vrfCoordinatorAddress)
     {
-        i_vrfCoordinator = VRFCoordinatorV2Interface(_vrfCoordinatorAddress);
         i_keyHash = _keyHash;
         i_subscriptionId = _subscriptionId;
-        owner = msg.sender;
         walletAddresses = _initialWallets;
     }
 
@@ -51,26 +48,31 @@ contract RandomWalletPicker is VRFConsumerBaseV2 {
      * @notice Allows the owner to set the 10 wallet addresses.
      * @param _newWallets The array of 10 new wallet addresses.
      */
-    function setWallets(address payable[10] memory _newWallets) public onlyOwner {
+    function setWallets(address payable[10] memory _newWallets) public onlyOwner { // Uses inherited onlyOwner
         walletAddresses = _newWallets;
-        emit WalletsSet(msg.sender, block.timestamp);
+        emit WalletsSet(msg.sender, block.timestamp); // msg.sender will be owner() due to onlyOwner modifier
     }
 
     /**
      * @notice Requests randomness from Chainlink VRF to pick a wallet.
      * @return requestId The ID of the VRF request.
      */
-    function pickRandomWallet() public onlyOwner returns (uint256 requestId) {
-        // Will revert if subscription is not set up and funded
-        requestId = i_vrfCoordinator.requestRandomWords(
-            i_keyHash,
-            uint64(i_subscriptionId),  // Convert to uint64 for VRF coordinator
-            i_requestConfirmations,
-            i_callbackGasLimit,
-            i_numWords
-        );
+    function pickRandomWallet() public onlyOwner returns (uint256 requestId) { // Uses inherited onlyOwner
+        // Will revert if subscription is not set up and funded correctly for VRF V2.5
+        // or if the consumer is not added to the subscription.
+        VRFV2PlusClient.RandomWordsRequest memory req = VRFV2PlusClient.RandomWordsRequest({
+            keyHash: i_keyHash,
+            subId: i_subscriptionId, // uint256 subscriptionId
+            requestConfirmations: i_requestConfirmations,
+            callbackGasLimit: i_callbackGasLimit,
+            numWords: i_numWords,
+            extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false})) // false for LINK payment
+        });
+
+        requestId = s_vrfCoordinator.requestRandomWords(req);
+        
         s_lastRequestId = requestId;
-        emit RandomnessRequested(requestId, msg.sender);
+        emit RandomnessRequested(requestId, msg.sender); // msg.sender will be owner() due to onlyOwner modifier
         return requestId;
     }
 
@@ -79,15 +81,19 @@ contract RandomWalletPicker is VRFConsumerBaseV2 {
      * @param requestId The ID of the request.
      * @param randomWords The array of random numbers provided by the oracle.
      */
-    function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
-        require(requestId == s_lastRequestId, "Invalid request ID");
-        require(randomWords.length > 0, "No random words returned");
-        
-        s_randomWord = randomWords[0];
-        uint256 index = s_randomWord % walletAddresses.length;
-        pickedWallet = walletAddresses[index];
-        
-        emit WalletPicked(requestId, pickedWallet);
+    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal /*virtual*/ override { // No need for virtual if final
+        {
+            // The new signature uses 'requestId' and 'randomWords'.
+            // The '_args' parameter is no longer present.
+            require(requestId == s_lastRequestId, "Invalid request ID");
+            require(randomWords.length > 0, "No random words returned");
+            
+            s_randomWord = randomWords[0];
+            uint256 index = s_randomWord % walletAddresses.length;
+            pickedWallet = walletAddresses[index];
+            
+            emit WalletPicked(requestId, pickedWallet);
+        }
     }
 
     /**
@@ -111,24 +117,7 @@ contract RandomWalletPicker is VRFConsumerBaseV2 {
      * @return VRF coordinator address, subscription ID, and key hash
      */
     function getVrfParams() external view returns (address, uint256, bytes32) {
-        return (address(i_vrfCoordinator), i_subscriptionId, i_keyHash);
-    }
-
-    /**
-     * @notice Modifier to restrict function access to the contract owner.
-     */
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
-        _;
-    }
-
-    /**
-     * @notice Changes the owner of the contract.
-     * @param newOwner address of the new owner.
-     */
-    function transferOwnership(address newOwner) public onlyOwner {
-        require(newOwner != address(0), "New owner cannot be zero address");
-        owner = newOwner;
+        return (address(s_vrfCoordinator), i_subscriptionId, i_keyHash);
     }
 
     // Fallback function to receive ETH
